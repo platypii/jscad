@@ -133,16 +133,23 @@ const shapesMapGeometry = (obj, objectify, params) => {
       const listofpaths = expandPath(obj, svgUnitsPmm, svgUnitsX, svgUnitsY, svgUnitsV, svgGroups, segments, pathSelfClosed)
       // order is important
       const listofentries = Object.entries(listofpaths).sort((a, b) => a[0].localeCompare(b[0]))
-      const shapes = listofentries.map((entry) => {
-        const path = entry[1]
-        if (target === 'geom2' && path.isClosed) {
-          const points = geometries.path2.toPoints(path).slice()
-          points.push(points[0]) // add first point again to create closing sides
-          return geometries.geom2.fromPoints(points)
-        }
-        return path
-      })
-      return shapes
+      if (target === 'geom2') {
+        // concatenate all sides to a single geom2
+        let sides = []
+        listofentries.forEach((entry) => {
+          const path = entry[1]
+          // discard unclosed paths
+          if (path.isClosed) {
+            const points = geometries.path2.toPoints(path)
+            const geom = geometries.geom2.fromPoints(points)
+            sides = sides.concat(geometries.geom2.toSides(geom))
+          }
+        })
+        if (sides.length === 0) return []
+        return geometries.geom2.create(sides)
+      } else {
+        return listofentries.map((entry) => entry[1])
+      }
     }
   }
 
@@ -156,6 +163,18 @@ const appendPoints = (points, geometry) => {
   return geometries.path2.fromPoints({ }, points)
 }
 
+/*
+ * Expands the given SVG path object into a set of path segments.
+ * @param {Object} obj - SVG path object to expand
+ * @param {Number} svgUnitsPmm - SVG units per millimeter
+ * @param {Number} svgUnitsX - X-axis SVG units
+ * @param {Number} svgUnitsY - Y-axis SVG units
+ * @param {Number} svgUnitsV - SVG units value
+ * @param {Object} svgGroups - SVG groups object
+ * @param {Array} segments - array of path segments to append to
+ * @param {Boolean} pathSelfClosed - Whether the path is self-closed
+ * @returns {Object} a object containing the named paths
+ */
 const expandPath = (obj, svgUnitsPmm, svgUnitsX, svgUnitsY, svgUnitsV, svgGroups, segments, pathSelfClosed) => {
   const paths = {}
   const on = 'path'
